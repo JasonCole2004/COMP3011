@@ -28,14 +28,50 @@ void ResizeCallback(GLFWwindow*, int w, int h)
 }
 
 
-#define DEG2RAD(n)	n*(M_PI/180)
+#define DEG2RAD(n) ((n) * (M_PI / 180.0f))
 
-//DEFINE YOUR FUNCTION FOR CREATING A CIRCLE HERE
+
+float* CreateCircle(int num_segments, float radius)
+{
+	// 3 vertices per triangle, 3 floats per vertex
+	int floats_per_triangle = 9;
+	int total_floats = num_segments * floats_per_triangle;
+
+	float* verts = (float*)malloc(sizeof(float) * total_floats);
+
+	float offset = 360.0f / num_segments;
+	float angle = 0.0f;
+
+	int index = 0;
+
+	for (int i = 0; i < num_segments; i++)
+	{
+		// v0 
+		verts[index++] = 0.0f;
+		verts[index++] = 0.0f;
+		verts[index++] = 0.0f;
+
+		// v1
+		verts[index++] = radius * sin(DEG2RAD(angle));
+		verts[index++] = radius * cos(DEG2RAD(angle));
+		verts[index++] = 0.0f;
+
+		// v2 
+		verts[index++] = radius * sin(DEG2RAD(angle + offset));
+		verts[index++] = radius * cos(DEG2RAD(angle + offset));
+		verts[index++] = 0.0f;
+
+		angle += offset;
+	}
+
+	return verts;
+}
 
 int main()
 {
 	glfwInit();
 
+	//set up window
 	GLFWwindow* window = glfwCreateWindow(640, 480, "2D modelling", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	glfwSetKeyCallback(window, KeyCallback);
@@ -43,18 +79,35 @@ int main()
 
 	gl3wInit();
 
+	// debuging
+	glEnable(GL_DEBUG_OUTPUT);
+	glDebugMessageCallback(DebugCallback, 0);
 
+	// compile shaders 
 	GLuint program = CompileShader("triangle.vert", "triangle.frag");
 
-	//CREATE CIRCLE HERE
+	int num_segments = 128;
+	float radius = 0.5;
+
+	float* vertices = CreateCircle(num_segments, radius);
+
+	int buffer_size = sizeof(float) * num_segments * 9;
 
 
 	glCreateBuffers(NUM_BUFFERS, Buffers);
-	//COPY VERTICES HERE
+	glNamedBufferStorage(Buffers[0], buffer_size, vertices, 0);
 	glGenVertexArrays(NUM_VAOS, VAOs);
 	glBindVertexArray(VAOs[0]);
 	glBindBuffer(GL_ARRAY_BUFFER, Buffers[0]);
-	//SETUP ATTRIBUTES HERE
+	glVertexAttribPointer(
+		0,                  // location
+		3,                  // x, y, z
+		GL_FLOAT,
+		GL_FALSE,
+		3 * sizeof(float),
+		(void*)0
+	);
+	glEnableVertexAttribArray(0);
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -63,14 +116,14 @@ int main()
 
 		glUseProgram(program);
 		glBindVertexArray(VAOs[0]);
-		glDrawArrays(GL_TRIANGLES, 0, 0);
+		glDrawArrays(GL_TRIANGLES, 0, num_segments * 3);
 		glBindVertexArray(0);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
 
-	//FREE THE ALLOCATED MEMORY HERE
+	free(vertices);
 
 	glfwDestroyWindow(window);
 	glfwTerminate();

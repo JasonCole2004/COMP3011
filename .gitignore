@@ -1,0 +1,44 @@
+# Visual Studio and IDE state
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+*.db-shm
+*.db-wal
+
+# Build folders
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+out/
+
+# C/C++ build artifacts
+*.obj
+*.o
+*.pch
+*.pdb
+*.idb
+*.ilk
+*.ipch
+*.tlog
+*.lastbuildstate
+*.recipe
+*.log
+*.exe
+
+# CMake/Ninja (if used)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+build/
+
+# OS cruft
+.DS_Store
+Thumbs.db
