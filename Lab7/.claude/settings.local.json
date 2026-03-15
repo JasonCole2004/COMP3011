@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/jason/Documents/Code/COMP3011/Lab6a/**)",
+      "Read(//c/Users/jason/Documents/Code/COMP3011/Lab6b/**)"
+    ]
+  }
+}
