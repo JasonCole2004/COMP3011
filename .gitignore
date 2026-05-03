@@ -19,7 +19,9 @@ x86/
 out/
 
 # C/C++ build artifacts
-*.obj
+# Compiled .obj files live inside x64/Debug/Release which are excluded above,
+# so no wildcard needed here (it would also block 3D model .obj files).
+*.o
 *.o
 *.pch
 *.pdb
