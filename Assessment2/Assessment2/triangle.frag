@@ -4,7 +4,6 @@ in vec3 col;
 in vec3 nor;
 in vec3 FragPos;
 in vec2 texCoord;
-in vec4 FragPosLightSpace;
 
 uniform vec3      lightPos;
 uniform vec3      lightColour;
@@ -16,8 +15,11 @@ uniform float     useShadow;
 uniform float     useNormalMap;
 uniform float     alpha;
 uniform sampler2D tex;
-uniform sampler2D shadowMap;
 uniform sampler2D normalMap;
+
+// Cube shadow map: sampled with a world-space direction from the sun
+uniform samplerCube shadowCubeMap;
+uniform float       shadowFarPlane;
 
 // Directional light (faint starlight from a fixed direction)
 uniform vec3 dirLightDir;
@@ -33,22 +35,18 @@ uniform float spotOuter;
 layout(location = 0) out vec4 fColour;
 layout(location = 1) out vec4 fEmissive; // only written by the sun, used for bloom
 
-float ShadowCalc(vec4 fragPosLightSpace, vec3 lightDir)
+float ShadowCalc(vec3 fragPos, vec3 N)
 {
-    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    projCoords = projCoords * 0.5 + 0.5;
+    vec3  fragToLight = fragPos - lightPos;
+    float currentDist = length(fragToLight);
+    float closestDist = texture(shadowCubeMap, fragToLight).r * shadowFarPlane;
 
-    // Outside the shadow map frustum = no shadow
-    if (projCoords.z > 1.0) return 0.0;
-    if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
-        projCoords.y < 0.0 || projCoords.y > 1.0) return 0.0;
+    // Slope-scaled bias: surfaces facing the light get a tighter bias to
+    // preserve contact shadows; glancing surfaces get more to avoid acne.
+    float cosTheta = max(dot(N, normalize(-fragToLight)), 0.0);
+    float bias     = mix(0.1, 0.02, cosTheta);
 
-    float closestDepth = texture(shadowMap, projCoords.xy).r;
-    float currentDepth = projCoords.z;
-
-    // Bias prevents shadow acne on surfaces facing away from the light
-    float bias = max(0.02 * (1.0 - dot(nor, lightDir)), 0.005);
-    return currentDepth - bias > closestDepth ? 1.0 : 0.0;
+    return currentDist - bias > closestDist ? 1.0 : 0.0;
 }
 
 void main()
@@ -75,7 +73,7 @@ void main()
         mat3 TBN = mat3(T, B, N);
 
         vec3 sampledN = texture(normalMap, texCoord).rgb * 2.0 - 1.0;
-        sampledN.xy  *= 8.0; // exaggerated so terrain bumps are clearly visible
+        sampledN.xy  *= 20.0; // exaggerated so terrain bumps are clearly visible
         N = normalize(TBN * sampledN);
     }
 
@@ -87,7 +85,7 @@ void main()
     float pointDiff = max(dot(N, pointDir), 0.0);
     vec3  pointRefl = reflect(-pointDir, N);
     float pointSpec = pow(max(dot(viewDir, pointRefl), 0.0), 32.0);
-    float shadow    = (useShadow > 0.5) ? ShadowCalc(FragPosLightSpace, pointDir) : 0.0;
+    float shadow    = (useShadow > 0.5) ? ShadowCalc(FragPos, N) : 0.0;
     vec3  pointContrib = (1.0 - shadow) * (pointDiff * lightColour + 0.5 * pointSpec * lightColour);
 
     // Directional light: subtle cool tone to fill the dark sides of planets

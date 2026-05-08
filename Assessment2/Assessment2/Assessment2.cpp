@@ -168,7 +168,7 @@ struct PlanetInfo
 int main()
 {
 	glfwInit();
-	glfwWindowHint(GLFW_SAMPLES, 4); // 4x MSAA
+	glfwWindowHint(GLFW_SAMPLES, 4); 
 	GLFWwindow* window = glfwCreateWindow(1920, 1080, "Solar System", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -247,7 +247,7 @@ int main()
 	}
 
 	// Moon (orbits Earth = planet 2)
-	std::vector<float> moonVerts = generateSphere(1.0f, 24, 24, 1.0f, 1.0f, 1.0f);
+	std::vector<float> moonVerts = generateSphere(1.0f, 64, 64, 1.0f, 1.0f, 1.0f);
 	int moonVertCount = (int)moonVerts.size() / 11;
 	glBindVertexArray(VAO[9]);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[9]);
@@ -285,7 +285,7 @@ int main()
 	glm::vec3 bezP2 = glm::vec3(-10.0f, -1.0f,  -4.0f);
 	glm::vec3 bezP3 = glm::vec3( -5.0f, -3.0f,  25.0f);
 
-	// Pre-bake the curve as a line strip so it can optionally be drawn for debugging
+	// Pre-bake the curve as a line strip so it can optionally be drawn
 	const int CURVE_SEGS = 64;
 	std::vector<float> curveVerts;
 	for (int i = 0; i <= CURVE_SEGS; i++)
@@ -516,7 +516,7 @@ int main()
 						b = materials[mat_id].diffuse[2];
 					}
 
-					// Collect positions first so we can compute a face normal if the OBJ has none
+					// Collect positions first to compute a face normal if the OBJ has none
 					glm::vec3 faceNormal(0.0f, 1.0f, 0.0f);
 					if (fv >= 3)
 					{
@@ -609,28 +609,29 @@ int main()
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-	// Shadow map: depth-only FBO rendered from the sun's point of view
-	const int SHADOW_SIZE = 2048;
-	unsigned int shadowFBO, shadowMapTex;
+	// Cube shadow map: one depth face per direction from the sun, covering the full solar system.
+	// 1024 per face (6 faces) gives similar memory to a single 2048 map while covering all directions.
+	const int SHADOW_SIZE = 4096;
+	unsigned int shadowFBO, shadowCubeMap;
+	glGenTextures(1, &shadowCubeMap);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, shadowCubeMap);
+	for (int i = 0; i < 6; i++)
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT,
+		             SHADOW_SIZE, SHADOW_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 	glGenFramebuffers(1, &shadowFBO);
-	glGenTextures(1, &shadowMapTex);
-	glBindTexture(GL_TEXTURE_2D, shadowMapTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_SIZE, SHADOW_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	float shadowBorder[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, shadowBorder);
 	glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMapTex, 0);
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	// Scene framebuffer: renders the full scene to a floating point texture so bloom can read it.
 	// A second colour texture is attached alongside it; the sun writes its colour there
-	// and everything else writes black, so bloom only ever glows around the sun.
+	// and everything else writes black, so bloom only ever glows around the sun
 	unsigned int sceneFBO, sceneTex, emissiveTex, sceneDepthRBO;
 	glGenFramebuffers(1, &sceneFBO);
 	glGenTextures(1, &sceneTex);
@@ -658,7 +659,7 @@ int main()
 	glDrawBuffers(2, sceneDrawBufs);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	// Bloom ping-pong FBOs (quarter resolution for performance)
+	// Bloom ping-pong FBOs (quarter resolution for performance on lab computers)
 	const int BW = 480, BH = 270;
 	unsigned int bloomFBO[2], bloomTex[2];
 	glGenFramebuffers(2, bloomFBO);
@@ -693,9 +694,9 @@ int main()
 	GLuint earthNormalTex = setup_texture("earth_normal_map.png");
 
 	glActiveTexture(GL_TEXTURE0);
-	glUniform1i(glGetUniformLocation(shaderProgram, "tex"),       0);
-	glUniform1i(glGetUniformLocation(shaderProgram, "shadowMap"), 1);
-	glUniform1i(glGetUniformLocation(shaderProgram, "normalMap"), 2);
+	glUniform1i(glGetUniformLocation(shaderProgram, "tex"),           0);
+	glUniform1i(glGetUniformLocation(shaderProgram, "shadowCubeMap"), 1);
+	glUniform1i(glGetUniformLocation(shaderProgram, "normalMap"),     2);
 
 	InitCamera(camera);
 	camera.Position = glm::vec3(0.0f, 5.0f, 30.0f);
@@ -709,9 +710,9 @@ int main()
 	}
 
 	// Satellite probe state: controlled with arrow keys and Q/E
-	float satAngle  = 0.0f;   // angle around Earth (radians)
-	float satRadius = 0.27f;  // orbital distance from Earth centre
-	float satHeight = 0.0f;   // vertical offset
+	float satAngle  = 0.0f;   
+	float satRadius = 0.27f;  
+	float satHeight = 0.0f;   
 
 	// Ship HUD position: tuned visually, shouldn't need changing
 	float shipPosX  =  0.38f;
@@ -759,36 +760,66 @@ int main()
 		asteroidModel = glm::translate(asteroidModel, asteroidPos);
 		asteroidModel = glm::scale(asteroidModel, glm::vec3(0.03f));
 
-		// Light space matrix: orthographic from sun looking at Earth
-		glm::mat4 lightView       = glm::lookAt(glm::vec3(0.0f), earthCenter, glm::vec3(0.0f, 1.0f, 0.0f));
-		glm::mat4 lightProjection = glm::ortho(-2.0f, 2.0f, -2.0f, 2.0f, 0.5f, 30.0f);
-		glm::mat4 lightSpaceMatrix = lightProjection * lightView;
+		// Satellite probe model: computed here so it is available for the shadow pass
+		glm::vec3 probePos = earthCenter + glm::vec3(
+			cosf(satAngle) * satRadius,
+			satHeight,
+			sinf(satAngle) * satRadius);
+		glm::mat4 probeModel = glm::translate(glm::mat4(1.0f), probePos);
+		probeModel = glm::scale(probeModel, glm::vec3(0.02f));
 
-		// Shadow pass
+		// Shadow pass: render 6 depth faces for the cube shadow map.
+		// Each face covers 90 degrees so together they cover all directions from the sun
+		const float shadowFar = 30.0f; 
+		glm::vec3   sunPos     = glm::vec3(0.0f);
+		glm::mat4   shadowProj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, shadowFar);
+		glm::mat4 shadowViews[6] = {
+			glm::lookAt(sunPos, sunPos + glm::vec3( 1, 0, 0), glm::vec3(0,-1, 0)),
+			glm::lookAt(sunPos, sunPos + glm::vec3(-1, 0, 0), glm::vec3(0,-1, 0)),
+			glm::lookAt(sunPos, sunPos + glm::vec3( 0, 1, 0), glm::vec3(0, 0, 1)),
+			glm::lookAt(sunPos, sunPos + glm::vec3( 0,-1, 0), glm::vec3(0, 0,-1)),
+			glm::lookAt(sunPos, sunPos + glm::vec3( 0, 0, 1), glm::vec3(0,-1, 0)),
+			glm::lookAt(sunPos, sunPos + glm::vec3( 0, 0,-1), glm::vec3(0,-1, 0)),
+		};
+
 		glViewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
 		glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
-		glClear(GL_DEPTH_BUFFER_BIT);
 		glUseProgram(shadowShader);
-		glUniformMatrix4fv(glGetUniformLocation(shadowShader, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
+		glUniform3fv(glGetUniformLocation(shadowShader, "lightPos"),  1, glm::value_ptr(sunPos));
+		glUniform1f (glGetUniformLocation(shadowShader, "farPlane"),  shadowFar);
 
-		for (int p = 0; p < NUM_PLANETS; p++)
+		for (int face = 0; face < 6; face++)
 		{
-			glm::mat4 pm = glm::mat4(1.0f);
-			pm = glm::rotate(pm, t     * planets[p].orbitSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
-			pm = glm::translate(pm, glm::vec3(planets[p].orbitRadius, 0.0f, 0.0f));
-			pm = glm::rotate(pm, realT * planets[p].spinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
-			pm = glm::scale(pm, glm::vec3(planets[p].size));
-			glUniformMatrix4fv(glGetUniformLocation(shadowShader, "model"), 1, GL_FALSE, glm::value_ptr(pm));
-			glBindVertexArray(VAO[p + 1]);
-			glDrawArrays(GL_TRIANGLES, 0, planets[p].vertCount);
-		}
-		glUniformMatrix4fv(glGetUniformLocation(shadowShader, "model"), 1, GL_FALSE, glm::value_ptr(moonModel));
-		glBindVertexArray(VAO[9]);
-		glDrawArrays(GL_TRIANGLES, 0, moonVertCount);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+			                       GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, shadowCubeMap, 0);
+			glClear(GL_DEPTH_BUFFER_BIT);
 
-		glUniformMatrix4fv(glGetUniformLocation(shadowShader, "model"), 1, GL_FALSE, glm::value_ptr(asteroidModel));
-		glBindVertexArray(asteroidVAO);
-		glDrawArrays(GL_TRIANGLES, 0, asteroidVertCount);
+			glm::mat4 shadowMat = shadowProj * shadowViews[face];
+			glUniformMatrix4fv(glGetUniformLocation(shadowShader, "shadowMatrix"), 1, GL_FALSE, glm::value_ptr(shadowMat));
+
+			for (int p = 0; p < NUM_PLANETS; p++)
+			{
+				glm::mat4 pm = glm::mat4(1.0f);
+				pm = glm::rotate(pm, t     * planets[p].orbitSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
+				pm = glm::translate(pm, glm::vec3(planets[p].orbitRadius, 0.0f, 0.0f));
+				pm = glm::rotate(pm, realT * planets[p].spinSpeed,  glm::vec3(0.0f, 1.0f, 0.0f));
+				pm = glm::scale(pm, glm::vec3(planets[p].size));
+				glUniformMatrix4fv(glGetUniformLocation(shadowShader, "model"), 1, GL_FALSE, glm::value_ptr(pm));
+				glBindVertexArray(VAO[p + 1]);
+				glDrawArrays(GL_TRIANGLES, 0, planets[p].vertCount);
+			}
+			glUniformMatrix4fv(glGetUniformLocation(shadowShader, "model"), 1, GL_FALSE, glm::value_ptr(moonModel));
+			glBindVertexArray(VAO[9]);
+			glDrawArrays(GL_TRIANGLES, 0, moonVertCount);
+
+			glUniformMatrix4fv(glGetUniformLocation(shadowShader, "model"), 1, GL_FALSE, glm::value_ptr(asteroidModel));
+			glBindVertexArray(asteroidVAO);
+			glDrawArrays(GL_TRIANGLES, 0, asteroidVertCount);
+
+			glUniformMatrix4fv(glGetUniformLocation(shadowShader, "model"), 1, GL_FALSE, glm::value_ptr(probeModel));
+			glBindVertexArray(probeVAO);
+			glDrawArrays(GL_TRIANGLES, 0, probeVertCount);
+		}
 
 		glBindFramebuffer(GL_FRAMEBUFFER, sceneFBO);
 		glViewport(0, 0, 1920, 1080);
@@ -804,12 +835,12 @@ int main()
 		glUseProgram(shaderProgram);
 
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, shadowMapTex);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, shadowCubeMap);
 		glActiveTexture(GL_TEXTURE0);
 
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"),             1, GL_FALSE, glm::value_ptr(view));
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"),       1, GL_FALSE, glm::value_ptr(projection));
-		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
+		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"),       1, GL_FALSE, glm::value_ptr(view));
+		glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+		glUniform1f(glGetUniformLocation(shaderProgram, "shadowFarPlane"), shadowFar);
 		glUniform3f(glGetUniformLocation(shaderProgram, "lightPos"),    0.0f, 0.0f, 0.0f);
 		glUniform3f(glGetUniformLocation(shaderProgram, "lightColour"), 1.1f, 1.1f, 1.0f);
 		glUniform3fv(glGetUniformLocation(shaderProgram, "camPos"), 1, glm::value_ptr(camera.Position));
@@ -893,12 +924,6 @@ int main()
 		glDrawArrays(GL_TRIANGLES, 0, moonVertCount);
 
 		// Probe (satellite): orbits Earth, arrow keys control angle/radius, Q/E for height
-		glm::vec3 probePos = earthCenter + glm::vec3(
-			cosf(satAngle) * satRadius,
-			satHeight,
-			sinf(satAngle) * satRadius);
-		glm::mat4 probeModel = glm::translate(glm::mat4(1.0f), probePos);
-		probeModel = glm::scale(probeModel, glm::vec3(0.02f));
 		glUniform1f(glGetUniformLocation(shaderProgram, "isLight"),    0.0f);
 		glUniform1f(glGetUniformLocation(shaderProgram, "hasTexture"), 0.0f);
 		glUniform1f(glGetUniformLocation(shaderProgram, "useShadow"),  1.0f);
@@ -907,7 +932,7 @@ int main()
 		glDrawArrays(GL_TRIANGLES, 0, probeVertCount);
 		glUniform1f(glGetUniformLocation(shaderProgram, "hasTexture"), 1.0f);
 
-		// Bezier curve path: uncomment to show the guide line (e.g. for report screenshots)
+		// Bezier curve path visual
 		//glUniform1f(glGetUniformLocation(shaderProgram, "isLight"),    1.0f);
 		//glUniform1f(glGetUniformLocation(shaderProgram, "hasTexture"), 0.0f);
 		//glm::mat4 identity = glm::mat4(1.0f);
@@ -938,11 +963,11 @@ int main()
 
 		// Bloom post-processing
 		// The scene is in sceneFBO. The emissive attachment contains only the sun,
-		// so bloom can't accidentally spread onto planets no matter how bright they are.
+		// so bloom can't spread onto planets (it blew the planets lighting).
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
 
-		// Step 1: desaturate the sun toward warm white and downsample to quarter res
+		// Desaturate the sun toward warm white and downsample to quarter res
 		glBindFramebuffer(GL_FRAMEBUFFER, bloomFBO[0]);
 		glViewport(0, 0, BW, BH);
 		glUseProgram(bloomBrightShader);
@@ -952,8 +977,7 @@ int main()
 		glBindVertexArray(flareVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
-		// Step 2: ping-pong Gaussian blur, alternates horizontal and vertical passes
-		// More iterations = wider, softer glow
+		// Ping-pong Gaussian blur, alternates horizontal and vertical passes
 		glUseProgram(bloomBlurShader);
 		glUniform1i(glGetUniformLocation(bloomBlurShader, "image"), 0);
 		bool horizontal = true;
@@ -966,7 +990,7 @@ int main()
 			horizontal = !horizontal;
 		}
 
-		// Step 3: add the blurred glow on top of the scene and output to the default FBO
+		// Add the blurred glow on top of the scene and output to the default FBO
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glViewport(0, 0, 1920, 1080);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -989,7 +1013,7 @@ int main()
 		// Lens flare: projects the sun to screen space, then draws 7 sprites
 		// along the axis from the sun toward the screen centre.
 		// Sprites use additive blending and are sized/coloured to mimic
-		// the look of real camera lens artefacts.
+		// the look of real camera lenses. 
 		{
 			glm::vec4 sunClip  = projection * view * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 			if (sunClip.w > 0.0f)
@@ -1009,7 +1033,6 @@ int main()
 					glm::vec2 axis   = glm::vec2(0.0f) - sunNDC;
 					float     aspect = 1920.0f / 1080.0f;
 
-					// t = position along sun→centre axis, size/colour tuned by eye
 					struct Sprite { float t, size, r, g, b, a; };
 					Sprite sprites[] = {
 						{ 0.0f,  0.20f, 1.0f, 0.95f, 0.70f, 0.35f }, // central glow

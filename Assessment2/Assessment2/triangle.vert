@@ -8,13 +8,11 @@ layout(location = 3) in vec2 vUV;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
-uniform mat4 lightSpaceMatrix;
 
 out vec3 col;
 out vec3 nor;
 out vec3 FragPos;
 out vec2 texCoord;
-out vec4 FragPosLightSpace;
 
 void main()
 {
@@ -27,7 +25,4 @@ void main()
 
     // Transform normal into world space using the normal matrix
     nor = normalize(mat3(transpose(inverse(model))) * vNor);
-
-    // Position in light space for shadow mapping
-    FragPosLightSpace = lightSpaceMatrix * worldPos;
 }
